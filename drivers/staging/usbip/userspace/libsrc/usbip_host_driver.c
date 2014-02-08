@@ -28,6 +28,7 @@
 #include "usbip_common.h"
 #include "usbip_host_driver.h"
 #include "list.h"
+#include "sysfs_utils.h"
 
 #undef  PROGNAME
 #define PROGNAME "libusbip"
@@ -138,33 +139,6 @@ static int refresh_exported_devices(void)
 	return 0;
 }
 
-static struct sysfs_driver *open_sysfs_host_driver(void)
-{
-	char bus_type[] = "usb";
-	char sysfs_mntpath[SYSFS_PATH_MAX];
-	char host_drv_path[SYSFS_PATH_MAX];
-	struct sysfs_driver *host_drv;
-	int rc;
-
-	rc = sysfs_get_mnt_path(sysfs_mntpath, SYSFS_PATH_MAX);
-	if (rc < 0) {
-		dbg("sysfs_get_mnt_path failed");
-		return NULL;
-	}
-
-	snprintf(host_drv_path, SYSFS_PATH_MAX, "%s/%s/%s/%s/%s",
-		 sysfs_mntpath, SYSFS_BUS_NAME, bus_type, SYSFS_DRIVERS_NAME,
-		 USBIP_HOST_DRV_NAME);
-
-	host_drv = sysfs_open_driver_path(host_drv_path);
-	if (!host_drv) {
-		dbg("sysfs_open_driver_path failed");
-		return NULL;
-	}
-
-	return host_drv;
-}
-
 static void usbip_exported_device_destroy()
 {
 	struct usbip_exported_device *edev, *edev_next;
@@ -195,18 +169,12 @@ int usbip_host_driver_open(void)
 	host_driver->ndevs = 0;
 	list_head_init(&host_driver->edev_list);
 
-	host_driver->sysfs_driver = open_sysfs_host_driver();
-	if (!host_driver->sysfs_driver)
-		goto err_free_host_driver;
-
 	rc = refresh_exported_devices();
 	if (rc < 0)
-		goto err_close_sysfs_driver;
+		goto err_free_host_driver;
 
 	return 0;
 
-err_close_sysfs_driver:
-	sysfs_close_driver(host_driver->sysfs_driver);
 err_free_host_driver:
 	free(host_driver);
 	host_driver = NULL;
@@ -223,9 +191,6 @@ void usbip_host_driver_close(void)
 
 	usbip_exported_device_destroy();
 
-	if (host_driver->sysfs_driver)
-		sysfs_close_driver(host_driver->sysfs_driver);
-
 	free(host_driver);
 	host_driver = NULL;
 
@@ -235,11 +200,6 @@ void usbip_host_driver_close(void)
 int usbip_host_refresh_device_list(void)
 {
 	int rc;
-
-	if (!udev_context) {
-		dbg("udev_new failed");
-		return -1;
-	}
 
 	usbip_exported_device_destroy();
 
@@ -256,8 +216,7 @@ int usbip_host_refresh_device_list(void)
 int usbip_host_export_device(struct usbip_exported_device *edev, int sockfd)
 {
 	char attr_name[] = "usbip_sockfd";
-	char attr_path[SYSFS_PATH_MAX];
-	struct sysfs_attribute *attr;
+	char sockfd_attr_path[SYSFS_PATH_MAX];
 	char sockfd_buff[30];
 	int ret;
 
@@ -276,30 +235,22 @@ int usbip_host_export_device(struct usbip_exported_device *edev, int sockfd)
 		return -1;
 	}
 
-	/* only the first interface is true */
-	snprintf(attr_path, sizeof(attr_path), "%s/%s",
+	snprintf(sockfd_attr_path, sizeof(sockfd_attr_path), "%s/%s",
 		 edev->udev.path, attr_name);
-
-	attr = sysfs_open_attribute(attr_path);
-	if (!attr) {
-		dbg("sysfs_open_attribute failed: %s", attr_path);
-		return -1;
-	}
+	dbg("usbip_sockfd attribute path: %s", sockfd_attr_path);
 
 	snprintf(sockfd_buff, sizeof(sockfd_buff), "%d\n", sockfd);
 	dbg("write: %s", sockfd_buff);
 
-	ret = sysfs_write_attribute(attr, sockfd_buff, strlen(sockfd_buff));
+	ret = write_sysfs_attribute(sockfd_attr_path, sockfd_buff,
+				    strlen(sockfd_buff));
 	if (ret < 0) {
-		dbg("sysfs_write_attribute failed: sockfd %s to %s",
-		    sockfd_buff, attr_path);
-		goto err_write_sockfd;
+		dbg("write_sysfs_attribute failed: sockfd %s to %s",
+		    sockfd_buff, sockfd_attr_path);
+		return ret;
 	}
 
 	dbg("connect: %s", edev->udev.busid);
-
-err_write_sockfd:
-	sysfs_close_attribute(attr);
 
 	return ret;
 }
