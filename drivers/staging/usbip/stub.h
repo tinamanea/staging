@@ -32,6 +32,28 @@
 #define STUB_BUSID_ADDED 2
 #define STUB_BUSID_ALLOC 3
 
+struct dev_state {
+	struct list_head list;      /* state list */
+	struct usb_device *dev;
+	struct file *file;
+	spinlock_t lock;            /* protects the async urb lists */
+	struct list_head async_pending;
+	struct list_head async_completed;
+	wait_queue_head_t wait;     /* wake up if a request completed */
+	unsigned int discsignr;
+	struct pid *disc_pid;
+	const struct cred *cred;
+	void __user *disccontext;
+	unsigned long ifclaimed;
+	u32 secid;
+	u32 disabled_bulk_eps;
+};
+
+int usb_hub_claim_port(struct usb_device *hdev, unsigned port1,
+		struct dev_state *owner);
+int usb_hub_release_port(struct usb_device *hdev, unsigned port1,
+		struct dev_state *owner);
+
 struct stub_device {
 	struct usb_interface *interface;
 	struct usb_device *udev;

@@ -336,6 +336,8 @@ static int stub_probe(struct usb_device *udev)
 	const char *udev_busid = dev_name(&udev->dev);
 	int err = 0;
 	struct bus_id_priv *busid_priv;
+	struct dev_state *ps;
+	int rc;
 
 	dev_dbg(&udev->dev, "Enter\n");
 
@@ -380,6 +382,15 @@ static int stub_probe(struct usb_device *udev)
 
 	busid_priv->shutdown_busid = 0;
 
+	/* claim this port. */
+	ps = list_entry(udev->filelist.next, struct dev_state, list);
+	rc = usb_hub_claim_port(udev->parent, udev->portnum, ps);
+	if (rc) {
+		dev_dbg(&udev->dev,
+			"couldn't claim port\n");
+		return rc;
+	}
+
 	/* set private data to usb_device */
 	dev_set_drvdata(&udev->dev, sdev);
 	busid_priv->sdev = sdev;
@@ -420,8 +431,14 @@ static void stub_disconnect(struct usb_device *udev)
 	struct stub_device *sdev;
 	const char *udev_busid = dev_name(&udev->dev);
 	struct bus_id_priv *busid_priv;
+	struct dev_state *ps;
 
 	dev_dbg(&udev->dev, "Enter\n");
+
+	/* release this port */
+	ps = list_entry(udev->filelist.next, struct dev_state, list);
+
+	usb_hub_release_port(udev->parent, udev->portnum, ps);
 
 	busid_priv = get_busid_priv(udev_busid);
 	if (!busid_priv) {
