@@ -25,6 +25,8 @@
 #include "usbip_common.h"
 #include "stub.h"
 
+struct device *unbound_dev;
+
 /*
  * Define device IDs here if you want to explicitly limit exportable devices.
  * In most cases, wildcard matching will be okay because driver binding can be
@@ -377,6 +379,8 @@ static int stub_probe(struct usb_device *udev)
 	dev_info(&udev->dev,
 		"usbip-host: register new device (bus %u dev %u)\n",
 		udev->bus->busnum, udev->devnum);
+
+	unbound_dev = &udev->dev;
 
 	busid_priv->shutdown_busid = 0;
 

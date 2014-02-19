@@ -19,12 +19,15 @@
 
 #include <linux/string.h>
 #include <linux/module.h>
+#include <linux/device.h>
 
 #include "usbip_common.h"
 #include "stub.h"
 
 #define DRIVER_AUTHOR "Takahiro Hirofuchi"
 #define DRIVER_DESC "USB/IP Host Driver"
+
+extern struct device *unbound_dev;
 
 struct kmem_cache *stub_priv_cache;
 /*
@@ -187,6 +190,20 @@ static ssize_t store_match_busid(struct device_driver *dev, const char *buf,
 static DRIVER_ATTR(match_busid, S_IRUSR | S_IWUSR, show_match_busid,
 		   store_match_busid);
 
+static ssize_t rebind_store(struct device_driver *dev, const char *buf,
+				 size_t count)
+{
+	int rc;
+
+	rc = device_attach(unbound_dev);
+	if (rc < 0)
+		printk("rebind failed\n");
+
+	return 1;
+}
+
+static DRIVER_ATTR_WO(rebind);
+
 static struct stub_priv *stub_priv_pop_from_listhead(struct list_head *listhead)
 {
 	struct stub_priv *priv, *tmp;
@@ -267,6 +284,13 @@ static int __init usbip_host_init(void)
 		goto err_create_file;
 	}
 
+	ret = driver_create_file(&stub_driver.drvwrap.driver,
+				 &driver_attr_rebind);
+	if (ret) {
+		pr_err("driver_create_file failed\n");
+		goto err_create_file;
+	}
+
 	pr_info(DRIVER_DESC " v" USBIP_VERSION "\n");
 	return ret;
 
@@ -281,6 +305,9 @@ static void __exit usbip_host_exit(void)
 {
 	driver_remove_file(&stub_driver.drvwrap.driver,
 			   &driver_attr_match_busid);
+
+	driver_remove_file(&stub_driver.drvwrap.driver,
+			   &driver_attr_rebind);
 
 	/*
 	 * deregister() calls stub_disconnect() for all devices. Device
