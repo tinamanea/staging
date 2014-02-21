@@ -366,6 +366,23 @@ struct usb_bus {
 #endif
 };
 
+struct dev_state {
+	struct list_head list;      /* state list */
+	struct usb_device *dev;
+	struct file *file;
+	spinlock_t lock;            /* protects the async urb lists */
+	struct list_head async_pending;
+	struct list_head async_completed;
+	wait_queue_head_t wait;     /* wake up if a request completed */
+	unsigned int discsignr;
+	struct pid *disc_pid;
+	const struct cred *cred;
+	void __user *disccontext;
+	unsigned long ifclaimed;
+	u32 secid;
+	u32 disabled_bulk_eps;
+};
+
 /* ----------------------------------------------------------------------- */
 
 struct usb_tt;
@@ -748,6 +765,11 @@ extern struct usb_host_interface *usb_find_alt_setting(
 		struct usb_host_config *config,
 		unsigned int iface_num,
 		unsigned int alt_num);
+
+int usb_hub_claim_port(struct usb_device *hdev, unsigned port1,
+		struct dev_state *owner);
+int usb_hub_release_port(struct usb_device *hdev, unsigned port1,
+		struct dev_state *owner);
 
 
 /**
@@ -1850,6 +1872,12 @@ extern void usb_unregister_notify(struct notifier_block *nb);
 
 /* debugfs stuff */
 extern struct dentry *usb_debug_root;
+
+/* port claiming functions */
+extern int usb_hub_claim_port(struct usb_device *hdev, unsigned port,
+		struct dev_state *owner);
+extern int usb_hub_release_port(struct usb_device *hdev, unsigned port,
+		struct dev_state *owner);
 
 #endif  /* __KERNEL__ */
 
