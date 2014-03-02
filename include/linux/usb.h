@@ -366,6 +366,24 @@ struct usb_bus {
 #endif
 };
 
+struct dev_state {
+	struct list_head list;      /* state list */
+	struct usb_device *dev;
+	struct file *file;
+	spinlock_t lock;            /* protects the async urb lists */
+	struct list_head async_pending;
+	struct list_head async_completed;
+	wait_queue_head_t wait;     /* wake up if a request completed */
+	unsigned int discsignr;
+	struct pid *disc_pid;
+	const struct cred *cred;
+	void __user *disccontext;
+	unsigned long ifclaimed;
+	u32 secid;
+	u32 disabled_bulk_eps;
+};
+
+
 /* ----------------------------------------------------------------------- */
 
 struct usb_tt;
@@ -749,6 +767,11 @@ extern struct usb_host_interface *usb_find_alt_setting(
 		unsigned int iface_num,
 		unsigned int alt_num);
 
+/* port claiming functions */
+int usb_hub_claim_port(struct usb_device *hdev, unsigned port1,
+		struct dev_state *owner);
+int usb_hub_release_port(struct usb_device *hdev, unsigned port1,
+		struct dev_state *owner);
 
 /**
  * usb_make_path - returns stable device path in the usb tree

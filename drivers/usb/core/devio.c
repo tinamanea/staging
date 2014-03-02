@@ -62,23 +62,6 @@
 /* Mutual exclusion for removal, open, and release */
 DEFINE_MUTEX(usbfs_mutex);
 
-struct dev_state {
-	struct list_head list;      /* state list */
-	struct usb_device *dev;
-	struct file *file;
-	spinlock_t lock;            /* protects the async urb lists */
-	struct list_head async_pending;
-	struct list_head async_completed;
-	wait_queue_head_t wait;     /* wake up if a request completed */
-	unsigned int discsignr;
-	struct pid *disc_pid;
-	const struct cred *cred;
-	void __user *disccontext;
-	unsigned long ifclaimed;
-	u32 secid;
-	u32 disabled_bulk_eps;
-};
-
 struct async {
 	struct list_head asynclist;
 	struct dev_state *ps;
